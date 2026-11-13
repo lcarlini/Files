@@ -1,0 +1,188 @@
+Package Library
+The proposal is to create a simple, company-owned Package Library for storing internal packages. The existing corporate infrastructure—possibly Artifactory—has been causing bureaucracy and blockers, so Jeff wants to avoid relying on it for this use case.
+
+The first version should support both:
+
+NuGet packages for C#/.NET libraries.
+
+npm packages for TypeScript/JavaScript libraries.
+
+These packages would be published to a central location rather than being added to an existing corporate package repository.
+
+Initial architecture
+The initial architecture should be intentionally simple:
+
+Store the package files in Azure Storage.
+
+Maintain a JSON index/catalog listing the available packages.
+
+Expose C# functions to search the catalog and retrieve packages.
+
+Later, evolve the search layer into a more complete backend that follows standard package-registry protocols.
+
+For the first version, the JSON file acts as the package catalog. When a new package is uploaded, the system updates that JSON file so clients can discover and download the package.
+
+NuGet implementation
+Jeff explained that a NuGet package is essentially a ZIP file. Because of that, the initial implementation does not need to be complex.
+
+The basic flow would be:
+
+Build and package a C# library as a .nupkg file.
+
+Upload the .nupkg file to Azure Storage.
+
+Add or update an entry in the JSON catalog.
+
+Allow developers or build systems to search for and download the package.
+
+The catalog should contain enough metadata to identify each package, including at least:
+
+Package name.
+
+Version.
+
+Package type, such as NuGet or npm.
+
+Download URL or Storage path.
+
+Upload date.
+
+Possibly description, owner, and source repository.
+
+npm/TypeScript implementation
+The same central library should also support npm-style packages. This means the service must be able to store and serve packages used by TypeScript and JavaScript projects.
+
+The initial approach can again use Azure Storage plus a JSON catalog. However, npm package handling may require additional metadata and compatibility considerations, especially if the goal is to let standard npm tooling consume the library directly.
+
+At minimum, the system should support:
+
+Uploading npm package tarballs.
+
+Storing package versions separately.
+
+Providing a searchable catalog.
+
+Returning package metadata and download locations.
+
+Version 1 scope
+The user should begin with the version 1 data file and build from there.
+
+In practice, version 1 should focus on:
+
+A working Azure Storage location for packages.
+
+A JSON-based package index.
+
+Basic upload and registration of packages.
+
+Basic search or lookup by package name and version.
+
+Basic download capability.
+
+Support for both NuGet and npm packages.
+
+Advanced features—such as full registry compatibility, rich search, authentication, permissions, retention policies, and automated dependency scanning—can be added later.
+
+Future search backend
+Once the basic version is working, the JSON catalog can be replaced or supplemented by a more robust search backend.
+
+That backend could provide:
+
+Search by package name.
+
+Search by keyword, description, tags, or owner.
+
+Version listing for each package.
+
+Latest-version resolution.
+
+Structured API responses.
+
+Compatibility with standard NuGet and npm registry protocols where practical.
+
+Jeff emphasized that these are well-documented, structured protocols, so the solution can evolve without needing to invent an entirely custom ecosystem.
+
+Local dependency cache
+As a future enhancement, Jeff suggested creating a mechanism similar to a centralized local npm/Yarn cache. The idea is to have one local folder per developer machine that stores all dependencies used during builds.
+
+Instead of each repository or build process downloading the same npm or NuGet packages repeatedly, the machine would maintain a shared local cache.
+
+This would reduce:
+
+Repeated downloads.
+
+Build time.
+
+Network usage.
+
+Storage duplication across repositories.
+
+Dependency on external package sources during builds.
+
+Proposed cache flow
+The proposed flow is:
+
+When a build needs a package, check whether it already exists in the local cache.
+
+If it exists, use the cached version immediately.
+
+If it does not exist, download it from npm, NuGet, or the appropriate external source.
+
+Make the downloaded package immediately available to the build.
+
+Asynchronously upload a copy to Azure Storage.
+
+Ensure the company retains a copy of every dependency used in a build.
+
+The asynchronous upload is important because the build should not be delayed while the package is being copied to the central Storage account.
+
+Versioning and storage layout
+A key requirement is to prevent different package versions from overwriting one another.
+
+The Storage structure and local cache must account for:
+
+Package name.
+
+Package version.
+
+Package type.
+
+Possibly target framework, runtime, or platform.
+
+Package integrity or hash, if needed.
+
+For example, the same package name may have multiple versions, and each version must remain independently available. A clear folder and naming convention will be necessary so that packages do not conflict or replace each other.
+
+Tools to investigate
+Jeff mentioned that, with unlimited tokens available, it would be worth exploring tools such as npm2 and Yarn for this caching strategy.
+
+The goal would be to determine whether existing tooling can provide part of the desired behavior, such as local caching, offline package resolution, or centralized dependency storage, before building every capability from scratch.
+
+Azure resource separation
+The user asked whether the Package Library Storage account should live in the same Azure resource group as the App Manager.
+
+Jeff said that it could be in the same resource group, but he prefers separating resources whenever possible.
+
+His preferred approach is to create smaller, isolated, and independent components, even if that means creating more resource groups or applications.
+
+Recommended Azure structure
+For cleaner ownership and lifecycle management, the Package Library could use its own resource group, for example:
+
+rg-package-library
+
+Storage account for package artifacts
+
+Function App or API for catalog/search operations
+
+Separate configuration, secrets, and monitoring resources
+
+The App Manager could remain in its own resource group, for example:
+
+rg-app-manager
+
+This separation makes it easier to manage permissions, costs, deployments, deletion, backups, and future changes independently.
+
+Guiding principle
+Jeff’s overall guidance is to avoid allowing corporate tooling or infrastructure constraints to block progress. If the existing package infrastructure creates friction, build a simple internal alternative.
+
+Start small, deliver a functional version 1, and evolve the solution only when the additional capabilities are actually needed.
